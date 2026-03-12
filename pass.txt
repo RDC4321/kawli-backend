@@ -1,5 +1,0 @@
-Supabase - kawli db - pass: Kawli_DB_2026!
-data API
-project url: https://anxpmpngbzntyssjmezt.supabase.co
-publishable key: sb_publishable_m5lcYXBnN0PN5iuTfVVRnw_BXiYFqaX
-database connection: postgresql://postgres:[Kawli_DB_2026!]@db.anxpmpngbzntyssjmezt.supabase.co:5432/postgres
