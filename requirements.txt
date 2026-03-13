@@ -4,3 +4,4 @@ python-dotenv
 supabase
 requests
 pydantic
+pydantic-settings
