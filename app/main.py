@@ -9,7 +9,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS middleware (must be early)
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # allow Framer frontend

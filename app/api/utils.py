@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Response 
 import hashlib
 from itertools import product
 
@@ -12,8 +12,11 @@ def root():
 def health_check():
     return {"status": "Kawli backend running"}
 
-def generate_cache_key(origin, destination, depart_date):
+@router.head("/health")
+def health_head():
+    return Response(status_code=200)
 
+def generate_cache_key(origin, destination, depart_date):
     raw = f"{origin}-{destination}-{depart_date}"
     return hashlib.md5(raw.encode()).hexdigest()
 
