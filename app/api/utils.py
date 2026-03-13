@@ -18,4 +18,5 @@ def generate_cache_key(origin, destination, depart_date):
     return hashlib.md5(raw.encode()).hexdigest()
 
 def generate_routes(origins,destinations):
-    return list(product(origins,destinations))
+    routes = list(product(origins,destinations))
+    return list(set(routes))

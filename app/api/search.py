@@ -1,69 +1,89 @@
-from fastapi import APIRouter, Query
-from app.database.queries import save_search, get_cached_flights, get_airports_by_city, search_airports
+import traceback
+from fastapi import APIRouter, HTTPException
+from app.database.queries import (
+    save_search, get_airports_by_city, search_airports,
+    save_flight_cache, get_flight_cache
+)
 from app.api.utils import generate_cache_key, generate_routes
-from app.database.supabase_client import supabase
+from app.services.flight_service import search_flights_api
 
 router = APIRouter(prefix="/search", tags=["search"])
 
+
 @router.get("/flights")
 def search_flights(origin: str, destination: str, depart_date: str):
+    try:
+        print(f"[INFO] /search/flights → origin={origin}, dest={destination}, date={depart_date}")
 
-    # convert city → airport
-    origin_airports = get_airports_by_city(origin)
-    destination_airports = get_airports_by_city(destination)
+        origin_airports = get_airports_by_city(origin)
+        destination_airports = get_airports_by_city(destination)
 
-    if not origin_airports or not destination_airports:
-        return {"error": "City not found in airport database"}
+        if not origin_airports:
+            return {"error": f"Origin '{origin}' not found. Try a city name or IATA code (e.g. 'New York' or 'JFK')."}
+        if not destination_airports:
+            return {"error": f"Destination '{destination}' not found. Try a city name or IATA code (e.g. 'Tokyo' or 'NRT')."}
 
-    origin_codes = [a["airport_code"] for a in origin_airports]
-    destination_codes = [a["airport_code"] for a in destination_airports]
-    routes = generate_routes(origin_codes, destination_codes)
+        origin_codes = [a["airport_code"] for a in origin_airports]
+        destination_codes = [a["airport_code"] for a in destination_airports]
 
-    #generate cache key
-    cache_key = generate_cache_key(origin_codes,destination_codes,depart_date)
+        print(f"[INFO] Routes: {origin_codes} → {destination_codes}")
 
-    #check cache
-    cached = (
-        supabase.table("flight_search_cache")
-        .select("*")
-        .eq("cache_key",cache_key)
-        .execute()
-    )
-    if cached.data:
-        return{
-            "source": "cache",
-            "origin": origin_codes,
-            "destination": destination_codes,
-            "results": cached.data
+        routes = generate_routes(origin_codes, destination_codes)
+        results = []
+
+        for origin_code, destination_code in routes:
+            cache_key = generate_cache_key(origin_code, destination_code, depart_date)
+            cached = get_flight_cache(cache_key)
+
+            if cached:
+                print(f"[INFO] Cache HIT: {origin_code}-{destination_code}")
+                results.append({
+                    "route": f"{origin_code}-{destination_code}",
+                    "source": "cache",
+                    "data": cached
+                })
+            else:
+                print(f"[INFO] Cache MISS: {origin_code}-{destination_code}")
+                flight_data = search_flights_api(origin_code, destination_code, depart_date)
+                save_flight_cache(cache_key, origin_code, destination_code, depart_date, flight_data)
+                results.append({
+                    "route": f"{origin_code}-{destination_code}",
+                    "source": "api",
+                    "data": flight_data
+                })
+
+        save_search(origin, destination, depart_date)
+
+        return {
+            "origin_input": origin,
+            "destination_input": destination,
+            "origin_airports": origin_codes,
+            "destination_airports": destination_codes,
+            "routes_checked": len(routes),
+            "results": results
         }
 
-    # save search
-    save_search(origin_codes, destination_codes, depart_date)
+    except Exception as e:
+        print(f"[ERROR] /search/flights crashed:\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-    return {
-        "source": "api",
-        "origin": origin_codes,
-        "destination": destination_codes,
-        "routes": routes,
-        "message": "No cached flights yet"
-    }
 
 @router.get("/airports")
 def airport_autocomplete(q: str):
+    try:
+        airports = search_airports(q)
+        results = []
+        for a in airports:
+            city = a.get("city") or "Unknown city"
+            results.append({
+                "code": a["airport_code"],
+                "name": a["airport_name"],
+                "city": city,
+                "country": a["country_code"],
+                "display": f"{city} - {a['airport_name']} ({a['airport_code']})"
+            })
+        return {"results": results}
 
-    airports = search_airports(q)
-
-    results = []
-
-    for a in airports:
-        city = a["city"] or "Unknown city"
-
-        results.append({
-            "code": a["airport_code"],
-            "name": a["airport_name"],
-            "city": city,
-            "country": a["country_code"],
-            "display": f"{city} - {a['airport_name']} ({a['airport_code']})"
-        })
-    
-    return {"results": results}
+    except Exception as e:
+        print(f"[ERROR] /search/airports crashed:\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))
