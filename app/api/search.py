@@ -51,16 +51,30 @@ def search_flights(origin: str, destination: str, depart_date: str):
                     "source": "api",
                     "data": flight_data
                 })
+        all_flights = []
+        for r in results:
+            flights = r.get("data", {}).get("flights", [])
+            all_flights.extend(flights)
+        requested_date_flights = []
+        cheapest_other_dates = []
 
+        for f in all_flights:
+            if f.get("depart_date") == depart_date:
+                requested_date_flights.append(f)
+            else:
+                cheapest_other_dates.append(f)
+        requested_date_flights.sort(key=lambda x: x.get("price_usd", 9999))
+        cheapest_other_dates.sort(key=lambda x: x.get("price_usd", 9999))
+        
+        cheapest_other_dates = cheapest_other_dates[:5]
         save_search(origin, destination, depart_date)
 
         return {
             "origin_input": origin,
             "destination_input": destination,
-            "origin_airports": origin_codes,
-            "destination_airports": destination_codes,
-            "routes_checked": len(routes),
-            "results": results
+            "requested_date_flights": requested_date_flights,
+            "cheapest_other_dates": cheapest_other_dates,
+                "routes_checked": len(routes)
         }
 
     except Exception as e:
